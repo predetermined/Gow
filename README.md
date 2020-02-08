@@ -19,7 +19,7 @@ The options are getting ignored, if a config file exists.
 ````javascript
 // Default config
 module.exports = {
-    command: "node",  
+    command: "node .",  
     files: "**/*",
     silent: false,
     delay: 1000
