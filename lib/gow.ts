@@ -4,6 +4,7 @@ import { exec } from "child_process";
 export interface Config {
     command?: string;
     files?: string;
+    excludes?: string[];
     silent?: boolean;
     delay?: number;
 }
@@ -17,8 +18,9 @@ interface File {
 
 export class Gow {
     private readonly delay: number;
+    private readonly excludes: string[];
     private fileExpression: RegExp;
-    private commandProcess: any;
+    private commandProcess: { kill() };
     private readyForNextReload: boolean = true;
     private reloadInQueue: boolean = false;
     private waitingForProcess: number;
@@ -28,6 +30,7 @@ export class Gow {
     };
 
     constructor(config: Config) {
+        this.excludes = config.excludes || ["node_modules"];
         this.delay = config.delay || 1000;
         this.fileExpression = this.getRegularExpressionByGlob(config.files || "***/*");
         this.commandProcess = this.spawnCommandProcess(config.command || "node .");
@@ -56,7 +59,7 @@ export class Gow {
     }
 
     getRegularExpressionByGlob(glob: string): RegExp {
-        return new RegExp((glob + "$")
+        return new RegExp(((glob.includes("/") ? glob : "./" + glob) + "$")
             .replace(/\*/g, "ALL")
             .replace(/\//g, "SLASH")
             .replace(/\./g, "\.")
@@ -87,17 +90,16 @@ export class Gow {
                 return !entry.isDirectory()
                     && !entry.name.endsWith(".swp")
                     && (path + entry.name).replace(this.fileExpression, "") === ""
+                    && !this.excludes.includes(entry.name)
             })
-            .map(async ({ name }): Promise<File> => {
-                return {
-                    name,
-                    path: path + name,
-                    modified: (await fs.stat(path + name)).mtime,
-                    lastModified: this.cache.last.length === 0 ? "FIRST_RUN" : this.cache.last.find(file => file.path === path + name) && this.cache.last.find(file => file.path === path + name).modified
-                }
-            }));
+            .map(async ({ name }): Promise<File> => ({
+                name,
+                path: path + name,
+                modified: (await fs.stat(path + name)).mtime,
+                lastModified: this.cache.last.length === 0 ? "FIRST_RUN" : this.cache.last.find(file => file.path === path + name) && this.cache.last.find(file => file.path === path + name).modified
+            })));
 
-        const folders = (await fs.readdir(path, { withFileTypes: true })).filter((folder: Dirent) => folder.isDirectory());
+        const folders = (await fs.readdir(path, { withFileTypes: true })).filter((folder: Dirent) => folder.isDirectory() && this.excludes.includes(folder.name));
 
         for (const folder of folders)
             files.push(...await this.getFiles(`${path}${folder.name}/`));
