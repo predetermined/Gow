@@ -1,0 +1,36 @@
+{
+  "name": "gow",
+  "version": "1.0.5",
+  "description": "Watch your files on the gow.",
+  "main": "lib/gow.js",
+  "bin": {
+    "gow": "bin/index.js"
+  },
+  "scripts": {
+    "test": "ava",
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^13.7.0",
+    "ava": "^3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/l2ig/gow.git"
+  },
+  "keywords": [
+    "File watcher",
+    "Watcher",
+    "Reload on file change",
+    "clidaemon",
+    "development",
+    "File reloader",
+    "Node Watcher"
+  ],
+  "author": "Leonard Ginters",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/l2ig/gow/issues"
+  },
+  "homepage": "https://github.com/l2ig/gow#readme"
+}
