@@ -11,6 +11,14 @@ function getCommandLineOption(option) {
         : null;
 }
 
+function getArrayFromCommandOption(option) {
+    const everythingReplacedBeforeOption = process.argv.join(" ").replace(new RegExp(`(.*)(?=${option} )`), "").replace(/ -(.*)/, "");
+    const commaSeparatedString = everythingReplacedBeforeOption.startsWith(option)
+        ? everythingReplacedBeforeOption.replace(new RegExp(`(.*)${option} `), "")
+        : null;
+    return commaSeparatedString?.replace(", ", ",").split(",") || null;
+}
+
 function isCommandOptionSet(option) {
     return process.argv.includes(option);
 }
@@ -28,6 +36,7 @@ if (fs.existsSync(process.cwd() + "/gow.config.js")) {
     const commandLineConfig: Config = {
         command: getCommandLineOption("-c") || getCommandLineOption("--command"),
         files: getCommandLineOption("-f") || getCommandLineOption("--files"),
+        excludes: getArrayFromCommandOption("-e") || getArrayFromCommandOption("--excludes"),
         silent: isCommandOptionSet("-s") || isCommandOptionSet("--silent"),
         delay: parseInt(getCommandLineOption("-d") || getCommandLineOption("--delay"))
     };
