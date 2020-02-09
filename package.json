@@ -7,7 +7,7 @@
     "gow": "bin/index.js"
   },
   "scripts": {
-    "test": "tsc && ava",
+    "test": "tsc && ava"
   },
   "dependencies": {},
   "devDependencies": {
