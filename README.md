@@ -1,7 +1,8 @@
-# Gow
-The easiest file watcher you have ever seen.
+![Gow logo](https://repository-images.githubusercontent.com/239176380/cadf1e00-4b78-11ea-8585-bb9c7b6b3038)
 
+[![NPM](https://nodei.co/npm/gow.png?downloads=true&downloadRank=true)](https://nodei.co/npm/gow/)
 ## Usage
+
 ````shell script
 Usage: gow [options]
 
