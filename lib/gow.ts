@@ -1,5 +1,5 @@
 import { Dirent, promises as fs } from "fs";
-import { exec } from "child_process";
+import { exec, ChildProcess } from "child_process";
 
 export interface Config {
     command?: string;
@@ -20,7 +20,7 @@ export class Gow {
     private readonly delay: number;
     private readonly excludes: string[];
     private fileExpression: RegExp;
-    private commandProcess: { kill() };
+    private commandProcess: ChildProcess;
     private readyForNextReload: boolean = true;
     private reloadInQueue: boolean = false;
     private waitingForProcess: number;
