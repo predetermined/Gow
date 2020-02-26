@@ -1,5 +1,5 @@
 import { Dirent, promises as fs } from "fs";
-import { exec, execSync, ChildProcess, execFile } from "child_process";
+import { exec, ChildProcess } from "child_process";
 
 export interface Config {
     command?: string;
@@ -19,52 +19,85 @@ interface File {
 
 export class Gow {
     private readonly path: string;
+    private readonly command: string;
     private readonly delay: number;
     private readonly excludes: string[];
     private readonly runtimePath: string;
+    private readonly silent: boolean;
     private ignoreRuntimeChanges: string[];
     private fileExpression: RegExp;
-    private commandProcess: ChildProcess;
+    private projectProcess: ChildProcess;
+    private runtimeProcess: ChildProcess;
     private readyForNextReload: boolean = true;
     private reloadInQueue: boolean = false;
     private waitingForProcess: number;
-    private cache: { last, current } = {
-        last: [],
-        current: []
+    private cache: { project, runtime } = {
+        project: { last: [], current: [] },
+        runtime: { last: [], current: [] }
     };
 
-    constructor(path: string, config?: Config, normalizedPath: string = path.replace(/(\/|\\)/, "/")) {
+    constructor(path: string, config?: Config) {
         this.excludes = config.excludes || ["node_modules"];
         this.delay = config.delay || 1000;
+        this.command = config.command || "node .";
+        this.silent = config.silent || false;
         this.fileExpression = this.getRegularExpressionByGlob(config.files || "***/*");
-        this.commandProcess = this.spawnCommandProcess(config.command || "node .");
-        this.path = normalizedPath.endsWith("/") ? normalizedPath : normalizedPath + "/";
+        this.path = this.normalizePath(path);
         this.runtimePath = this.path + ".gowing/";
 
-        this.copyIntoRuntime();
-        execSync("cd .gowing");
+        this.createRuntime(true);
+    }
 
-        if (!config.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
+    createProcesses(): void {
+        this.projectProcess = this.spawnCommandProcess(this.command);
 
-        setInterval(async () => {
-            if (this.reloadInQueue && this.readyForNextReload) {
+        process.chdir(this.runtimePath);
+        this.runtimeProcess = this.spawnCommandProcess(this.command);
+    }
+
+    async createRuntime(firstRun: boolean = false): Promise<void> {
+        if (firstRun) {
+            await this.copyIntoRuntime();
+            this.createProcesses();
+
+            if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
+            setInterval(async () => {
+                const modifiedRuntimeFiles = await this.getModifiedRuntimeFiles();
+                const haveProjectFilesBeenModified = await this.haveProjectFilesBeenModified();
+
+                if (modifiedRuntimeFiles) {
+                    for (const modifiedRuntimeFile of modifiedRuntimeFiles) {
+                        await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
+                        this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
+                    }
+
+                    if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Runtime files have been modified, copying them to the project root");
+                }
+
+                if (this.reloadInQueue && this.readyForNextReload) {
+                    this.readyForNextReload = false;
+                    this.reloadInQueue = false;
+                    this.createProcesses();
+                    if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
+                    return;
+                }
+
+                if (!haveProjectFilesBeenModified) return;
+                if (!this.readyForNextReload) {
+                    this.reloadInQueue = true;
+                    return;
+                }
+
                 this.readyForNextReload = false;
-                this.reloadInQueue = false;
-                this.commandProcess = this.spawnCommandProcess(config.command || "node .");
-                if (!config.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
-                return;
-            }
+                this.createProcesses();
+                if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
+            }, 1000 / 5);
+            return;
+        }
+    }
 
-            if (!await this.haveFilesBeenModified()) return;
-            if (!this.readyForNextReload) {
-                this.reloadInQueue = true;
-                return;
-            }
-
-            this.readyForNextReload = false;
-            this.commandProcess = this.spawnCommandProcess(config.command || "node .");
-            if (!config.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
-        }, 1000 / 5);
+    normalizePath(path: string) {
+        return path.replace(/(\/|\\)/, "/").endsWith("/") ? path.replace(/(\/|\\)/, "/") : path.replace(/(\/|\\)/, "/") + "/";
     }
 
     getRegularExpressionByGlob(glob: string): RegExp {
@@ -79,7 +112,7 @@ export class Gow {
     }
 
     spawnCommandProcess(command): any {
-        if (this.commandProcess?.kill) this.commandProcess.kill();
+        if (this.projectProcess?.kill) this.projectProcess.kill();
 
         const processID = Math.round(Math.random() * 1000);
         this.waitingForProcess = processID;
@@ -88,7 +121,7 @@ export class Gow {
             if (this.waitingForProcess === processID) this.readyForNextReload = true;
         }, this.delay);
 
-        return exec(command, { cwd: this.runtimePath }, (error: Error, stdout: string, stderr: string) => {
+        return exec(command, (error: Error, stdout: string, stderr: string) => {
             (stdout || stderr).length > 2 && console.log((stdout || stderr).replace(/\n$/g, ""));
         });
     }
@@ -100,7 +133,7 @@ export class Gow {
             await fs.mkdir(this.runtimePath);
         }
 
-        const files = await this.getFiles(this.path);
+        const files = await this.getFiles(this.path, { last: [], current: [] });
         
         for (const { path, normalizedPath = path.replace(/(\/|\\)/, "/"), relativePath = normalizedPath.replace(this.path, "") } of files) {
             const folders = relativePath.match(/([a-zA-Z0-9]*)(?=\/)/g);
@@ -119,7 +152,7 @@ export class Gow {
         }
     }
 
-    private async getFiles(path: string = "./"): Promise<File[]> {
+    private async getFiles(path: string = "./", cache: { last, current }): Promise<File[]> {
         const files = await Promise.all((await fs.readdir(path, { withFileTypes: true }))
             .filter((entry: Dirent): boolean => {
                 return !entry.isDirectory()
@@ -127,27 +160,37 @@ export class Gow {
                     && (path + entry.name).replace(this.fileExpression, "") === ""
                     && !this.excludes.includes(entry.name)
             })
-            .map(async ({ name }): Promise<File> => {
+            .map(async ({ name }: { name: string }): Promise<File> => {
                 return {
                     name,
                     path: path + name,
                     modified: (await fs.stat(path + name)).mtime,
-                    lastModified: this.cache.last.length === 0 ? "FIRST_RUN" : this.cache.last.find(file => file.path === path + name) && this.cache.last.find(file => file.path === path + name).modified
+                    lastModified: cache.last.length === 0 ? "FIRST_RUN" : cache.last.find(file => file.path === path + name) && cache.last.find(file => file.path === path + name).modified
                 }
             }));
 
         const folders = (await fs.readdir(path, { withFileTypes: true })).filter((folder: Dirent) => folder.isDirectory() && !this.excludes.includes(folder.name) && !folder.name.startsWith("."));
 
         for (const folder of folders)
-            files.push(...await this.getFiles(`${path}${folder.name}/`));
+            files.push(...await this.getFiles(`${path}${folder.name}/`, cache));
 
         return files;
     }
 
-    private async haveFilesBeenModified(): Promise<boolean> {
-        this.cache.last = this.cache.current;
-        this.cache.current = await this.getFiles();
+    private async getModifiedRuntimeFiles() {
+        this.cache.runtime.last = this.cache.runtime.current;
+        this.cache.runtime.current = await this.getFiles(this.runtimePath, this.cache.runtime);
 
-        return this.cache.current.filter((file: File) => (file.lastModified && file.lastModified.toString()) !== file.modified.toString() && file.lastModified !== "FIRST_RUN").length > 0;
+        const changedFiles = this.cache.runtime.current.filter((file: File) => (file.lastModified && file.lastModified.toString()) !== file.modified.toString() && file.lastModified !== "FIRST_RUN");
+        return changedFiles.length > 0 ? changedFiles : false;
+    }
+
+    private async haveProjectFilesBeenModified() {
+        this.cache.project.last = this.cache.project.current;
+        this.cache.project.current = await this.getFiles(this.path, this.cache.project);
+
+        const changedFiles = this.cache.project.current.filter((file: File) => (file.lastModified && file.lastModified.toString()) !== file.modified.toString() && file.lastModified !== "FIRST_RUN" && !this.ignoreRuntimeChanges.includes(file.name)).length > 0;
+        this.ignoreRuntimeChanges = [];
+        return changedFiles;
     }
 }

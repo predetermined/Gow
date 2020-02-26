@@ -23,7 +23,7 @@ function isCommandOptionSet(option) {
     return process.argv.includes(option);
 }
 
-if (fs.existsSync(process.cwd() + "/gow.config.js") && fs.existsSync(process.cwd() + "/package.json")) {
+if (fs.existsSync(process.cwd() + "/gow.config.js")) {
     import(process.cwd() + "/gow.config.js").then(config => {
         if (config.default) {
             new Gow(process.cwd(), config.default);
