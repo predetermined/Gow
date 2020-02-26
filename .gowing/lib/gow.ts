@@ -42,6 +42,7 @@ export class Gow {
 
         this.copyIntoRuntime();
         execSync("cd .gowing");
+        console.log(execSync("cd").toString());
 
         if (!config.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
 
