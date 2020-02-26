@@ -22,6 +22,7 @@ export class Gow {
     private readonly delay: number;
     private readonly excludes: string[];
     private readonly runtimePath: string;
+    private ignoreRuntimeChanges: string[];
     private fileExpression: RegExp;
     private commandProcess: ChildProcess;
     private readyForNextReload: boolean = true;
@@ -87,7 +88,7 @@ export class Gow {
             if (this.waitingForProcess === processID) this.readyForNextReload = true;
         }, this.delay);
 
-        return exec(command, (error: Error, stdout: string, stderr: string) => {
+        return exec(command, { cwd: this.runtimePath }, (error: Error, stdout: string, stderr: string) => {
             (stdout || stderr).length > 2 && console.log((stdout || stderr).replace(/\n$/g, ""));
         });
     }
