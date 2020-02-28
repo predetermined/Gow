@@ -3,7 +3,7 @@
 import { Config, Gow } from "../lib/gow";
 import * as fs from "fs";
 
-function getCommandLineOption(option) {
+function getStringFromOption(option: string): string {
     const everythingReplacedBeforeOption = process.argv.join(" ").replace(new RegExp(`(.*)(?=${option} )`), "").replace(/ -(.*)/, "");
 
     return everythingReplacedBeforeOption.startsWith(option)
@@ -11,20 +11,19 @@ function getCommandLineOption(option) {
         : null;
 }
 
-function getArrayFromCommandOption(option) {
-    const everythingReplacedBeforeOption = process.argv.join(" ").replace(new RegExp(`(.*)(?=${option} )`), "").replace(/ -(.*)/, "");
-    const commaSeparatedString = everythingReplacedBeforeOption.startsWith(option)
-        ? everythingReplacedBeforeOption.replace(new RegExp(`(.*)${option} `), "")
-        : null;
-    return commaSeparatedString?.replace(", ", ",").split(",") || null;
+function getArrayFromOption(option: string): string[] {
+    const options = process.argv.join(" ")
+        .match(new RegExp(`${option} ([a-zA-Z.-_\/* ]*)`, "g"))
+        ?.map((charactersAfterOption: string): string => charactersAfterOption.replace(new RegExp(`(.*)${option} `), "").replace(/ -(.*)/, ""));
+    return options;
 }
 
-function isCommandOptionSet(option) {
+function isCommandOptionSet(option: string): boolean {
     return process.argv.includes(option);
 }
 
 if (fs.existsSync(process.cwd() + "/gow.config.js")) {
-    import(process.cwd() + "/gow.config.js").then(config => {
+    import(process.cwd() + "/gow.config.js").then((config: Config & { default? }): void => {
         if (config.default) {
             new Gow(process.cwd(), config.default);
             return;
@@ -34,11 +33,10 @@ if (fs.existsSync(process.cwd() + "/gow.config.js")) {
     });
 }else {
     const commandLineConfig: Config = {
-        command: getCommandLineOption("-c") || getCommandLineOption("--command"),
-        files: getCommandLineOption("-f") || getCommandLineOption("--files"),
-        excludes: getArrayFromCommandOption("-e") || getArrayFromCommandOption("--excludes"),
+        command: getStringFromOption("-c") || getStringFromOption("--command"),
+        files: getArrayFromOption("-f") || getArrayFromOption("--files"),
         silent: isCommandOptionSet("-s") || isCommandOptionSet("--silent"),
-        delay: parseInt(getCommandLineOption("-d") || getCommandLineOption("--delay"))
+        delay: parseInt(getStringFromOption("-d") || getStringFromOption("--delay"))
     };
 
     new Gow(process.cwd(), commandLineConfig);

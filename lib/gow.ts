@@ -3,8 +3,7 @@ import { exec, ChildProcess } from "child_process";
 
 export interface Config {
     command?: string;
-    files?: string;
-    excludes?: string[];
+    files?: string[];
     silent?: boolean;
     delay?: number;
 }
@@ -21,7 +20,6 @@ export class Gow {
     private readonly path: string;
     private readonly command: string;
     private readonly delay: number;
-    private readonly excludes: string[];
     private readonly runtimePath: string;
     private readonly silent: boolean;
     private ignoreRuntimeChanges: string[];
@@ -37,11 +35,10 @@ export class Gow {
     };
 
     constructor(path: string, config?: Config) {
-        this.excludes = config.excludes || ["node_modules"];
         this.delay = config.delay || 1000;
         this.command = config.command || "node .";
         this.silent = config.silent || false;
-        this.fileExpression = this.getRegularExpressionByGlob(config.files || "***/*");
+        this.fileExpression = config.files ? new RegExp(config.files.map((fileGlob: string) => this.getRegularExpressionByGlob(fileGlob)).join("|")) : new RegExp(this.getRegularExpressionByGlob("***/*.js"));
         this.path = this.normalizePath(path);
         this.runtimePath = this.path + ".gowing/";
 
@@ -49,10 +46,10 @@ export class Gow {
     }
 
     createProcesses(): void {
-        this.projectProcess = this.spawnCommandProcess(this.command);
+        this.projectProcess = this.spawnCommandProcess(this.command, "PROJECT");
 
         process.chdir(this.runtimePath);
-        this.runtimeProcess = this.spawnCommandProcess(this.command);
+        this.runtimeProcess = this.spawnCommandProcess(this.command, "RUNTIME");
     }
 
     async createRuntime(firstRun: boolean = false): Promise<void> {
@@ -61,12 +58,13 @@ export class Gow {
             this.createProcesses();
 
             if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
+            
             setInterval(async () => {
-                const modifiedRuntimeFiles = await this.getModifiedRuntimeFiles();
-                const haveProjectFilesBeenModified = await this.haveProjectFilesBeenModified();
+                const modifiedRuntimeFiles: boolean | File[] = await this.getModifiedRuntimeFiles();
+                const haveProjectFilesBeenModified: boolean = await this.haveProjectFilesBeenModified();
 
                 if (modifiedRuntimeFiles) {
-                    for (const modifiedRuntimeFile of modifiedRuntimeFiles) {
+                    for (const modifiedRuntimeFile of (modifiedRuntimeFiles as File[])) {
                         await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
                         this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
                     }
@@ -96,25 +94,34 @@ export class Gow {
         }
     }
 
-    normalizePath(path: string) {
-        return path.replace(/(\/|\\)/, "/").endsWith("/") ? path.replace(/(\/|\\)/, "/") : path.replace(/(\/|\\)/, "/") + "/";
+    normalizePath(path: string, tailingSlash: boolean = true) {
+        const normalizedPath = path.replace(/(\/|\\)/, "/");
+
+        return tailingSlash && !normalizedPath.endsWith("/") ? normalizedPath + "/" : normalizedPath;
     }
 
-    getRegularExpressionByGlob(glob: string): RegExp {
-        return new RegExp(((glob.includes("/") ? glob : "./" + glob) + "$")
+    getRegularExpressionByGlob(glob: string): string {
+        return ((glob.includes("/") ? glob : "./" + glob) + "$")
             .replace(/\*/g, "ALL")
             .replace(/\//g, "SLASH")
             .replace(/\./g, "\.")
             .replace(/ALLALLALL/g, "((.*)(?=\\/)(\\/)|)")
             .replace(/ALLALL/g, "(([a-zA-Z0-9-_]*)\\/|\.\/|)")
             .replace(/ALL/g, "([a-zA-Z0-9-_.]*)")
-            .replace(/SLASH/g, ""));
+            .replace(/SLASH/g, "");
     }
 
-    spawnCommandProcess(command): any {
-        if (this.projectProcess?.kill) this.projectProcess.kill();
+    spawnCommandProcess(command: string, env: "PROJECT" | "RUNTIME" = "PROJECT"): any {
+        switch (env) {
+            case "PROJECT":
+                this.projectProcess?.kill();
+                break;
+            case "RUNTIME":
+                this.runtimeProcess?.kill();
+                break;
+        }
 
-        const processID = Math.round(Math.random() * 1000);
+        const processID: number = Math.round(Math.random() * 1000);
         this.waitingForProcess = processID;
 
         setTimeout(() => {
@@ -133,10 +140,10 @@ export class Gow {
             await fs.mkdir(this.runtimePath);
         }
 
-        const files = await this.getFiles(this.path, { last: [], current: [] });
+        const files: File[] = await this.getFiles(this.path, { last: [], current: [] });
         
         for (const { path, normalizedPath = path.replace(/(\/|\\)/, "/"), relativePath = normalizedPath.replace(this.path, "") } of files) {
-            const folders = relativePath.match(/([a-zA-Z0-9]*)(?=\/)/g);
+            const folders: string[] = relativePath.match(/([a-zA-Z0-9]*)(?=\/)/g);
             
             if (folders) {
                 for (const folder of folders) {
@@ -153,12 +160,10 @@ export class Gow {
     }
 
     private async getFiles(path: string = "./", cache: { last, current }): Promise<File[]> {
-        const files = await Promise.all((await fs.readdir(path, { withFileTypes: true }))
+        const files: File[] = await Promise.all((await fs.readdir(path, { withFileTypes: true }))
             .filter((entry: Dirent): boolean => {
                 return !entry.isDirectory()
                     && !entry.name.endsWith(".swp")
-                    && (path + entry.name).replace(this.fileExpression, "") === ""
-                    && !this.excludes.includes(entry.name)
             })
             .map(async ({ name }: { name: string }): Promise<File> => {
                 return {
@@ -169,7 +174,11 @@ export class Gow {
                 }
             }));
 
-        const folders = (await fs.readdir(path, { withFileTypes: true })).filter((folder: Dirent) => folder.isDirectory() && !this.excludes.includes(folder.name) && !folder.name.startsWith("."));
+        const folders: Dirent[] = (await fs.readdir(path, { withFileTypes: true })).filter((folder: Dirent): boolean => {
+            return folder.isDirectory() 
+                && !folder.name.startsWith(".")
+                && folder.name !== "node_modules";
+        });
 
         for (const folder of folders)
             files.push(...await this.getFiles(`${path}${folder.name}/`, cache));
@@ -177,20 +186,31 @@ export class Gow {
         return files;
     }
 
-    private async getModifiedRuntimeFiles() {
+    private async getModifiedRuntimeFiles(): Promise<boolean | File[]> {
         this.cache.runtime.last = this.cache.runtime.current;
         this.cache.runtime.current = await this.getFiles(this.runtimePath, this.cache.runtime);
 
-        const changedFiles = this.cache.runtime.current.filter((file: File) => (file.lastModified && file.lastModified.toString()) !== file.modified.toString() && file.lastModified !== "FIRST_RUN");
+        const changedFiles: File[] = this.cache.runtime.current.filter((file: File): boolean => {
+            return (this.normalizePath(file.path, false).replace(this.runtimePath, "")).replace(this.fileExpression, "")  === ""
+                && (file.lastModified && file.lastModified.toString()) !== file.modified.toString() 
+                && file.lastModified !== "FIRST_RUN";
+        });
+
         return changedFiles.length > 0 ? changedFiles : false;
     }
 
-    private async haveProjectFilesBeenModified() {
+    private async haveProjectFilesBeenModified(): Promise<boolean> {
         this.cache.project.last = this.cache.project.current;
         this.cache.project.current = await this.getFiles(this.path, this.cache.project);
 
-        const changedFiles = this.cache.project.current.filter((file: File) => (file.lastModified && file.lastModified.toString()) !== file.modified.toString() && file.lastModified !== "FIRST_RUN" && !this.ignoreRuntimeChanges.includes(file.name)).length > 0;
+        const haveProjectFilesBeenModified: boolean = this.cache.project.current.filter((file: File): boolean => {
+            return (this.normalizePath(file.path, false).replace(this.path, "")).replace(this.fileExpression, "")  === ""
+                && (file.lastModified && file.lastModified.toString()) !== file.modified.toString() 
+                && file.lastModified !== "FIRST_RUN"
+                && !this.ignoreRuntimeChanges.includes(file.name);
+        }).length > 0;
+
         this.ignoreRuntimeChanges = [];
-        return changedFiles;
+        return haveProjectFilesBeenModified;
     }
 }
