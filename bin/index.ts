@@ -4,7 +4,7 @@ import { Config, Gow } from "../lib/gow";
 import * as fs from "fs";
 
 function getStringFromOption(option: string): string {
-    const everythingReplacedBeforeOption = process.argv.join(" ").replace(new RegExp(`(.*)(?=${option} )`), "").replace(/ -(.*)/, "");
+    const everythingReplacedBeforeOption: string = process.argv.join(" ").replace(new RegExp(`(.*)(?=${option} )`), "").replace(/ -(.*)/, "");
 
     return everythingReplacedBeforeOption.startsWith(option)
         ? everythingReplacedBeforeOption.replace(new RegExp(`(.*)${option} `), "")
@@ -12,7 +12,7 @@ function getStringFromOption(option: string): string {
 }
 
 function getArrayFromOption(option: string): string[] {
-    const options = process.argv.join(" ")
+    const options: string[] = process.argv.join(" ")
         .match(new RegExp(`${option} ([a-zA-Z.-_\/* ]*)`, "g"))
         ?.map((charactersAfterOption: string): string => charactersAfterOption.replace(new RegExp(`(.*)${option} `), "").replace(/ -(.*)/, ""));
     return options;
