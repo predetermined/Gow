@@ -12,15 +12,15 @@ Options:
     -s, --silent      Disable console output
     -d, --delay       Minimum delay between the reloads
 
-The options are getting ignored, if a config file exists.
+# The options are getting ignored, if a config file exists.
 ````
 
 ## Examples
 ````shell script
-// Listen to all JavaScript files within the directory
+# Listen to all JavaScript files within the directory
 gow -f "***/*.js"
 
-// Listen to all JSON and TypeScript files within the directory and make sure the TypeScript files are getting compiled on reload
+# Listen to all JSON and TypeScript files within the directory and make sure the TypeScript files are getting compiled on reload
 gow -f "***/*.ts" -f "***/*.json" -c "tsc && node ."
 ````
 
