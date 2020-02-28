@@ -3,7 +3,7 @@
 [![NPM](https://nodei.co/npm/gow.png?downloads=true&downloadRank=true)](https://nodei.co/npm/gow/)
 ## Usage
 
-````shell script
+````
 Usage: gow [options]
 
 Options:
@@ -12,7 +12,7 @@ Options:
     -s, --silent      Disable console output
     -d, --delay       Minimum delay between the reloads
 
-# The options are getting ignored, if a config file exists.
+The options are getting ignored, if a config file exists.
 ````
 
 ## Examples
