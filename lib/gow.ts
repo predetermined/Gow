@@ -143,8 +143,8 @@ export class Gow {
         const files: File[] = await this.getFiles(this.path, { last: [], current: [] });
         
         for (const { path, normalizedPath = path.replace(/(\/|\\)/, "/"), relativePath = normalizedPath.replace(this.path, "") } of files) {
-            const folders: string[] = relativePath.match(/([a-zA-Z0-9]*)(?=\/)/g);
-            
+            const folders: string[] = relativePath.match(/([a-zA-Z0-9\/]*)(?=\/)/g);
+
             if (folders) {
                 for (const folder of folders) {
                     try {
