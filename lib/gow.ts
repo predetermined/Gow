@@ -38,7 +38,7 @@ export class Gow {
         this.delay = config.delay || 1000;
         this.command = config.command || "node .";
         this.silent = config.silent || false;
-        this.fileExpression = config.files ? new RegExp(config.files.map((fileGlob: string) => this.getRegularExpressionByGlob(fileGlob)).join("|")) : new RegExp(this.getRegularExpressionByGlob("***/*.js"));
+        this.fileExpression = config.files ? new RegExp(config.files.map((fileGlob: string) => this.getRegularExpressionByGlob(fileGlob)).join("|")) : new RegExp(this.getRegularExpressionByGlob("***/*"));
         this.path = this.normalizePath(path);
         this.runtimePath = this.path + ".gowing/";
 
