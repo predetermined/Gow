@@ -24,12 +24,13 @@
     "Watcher",
     "Reload on file change",
     "clidaemon",
-    "development",
     "File reloader",
-    "Node Watcher"
+    "Node Watcher",
+    "Live reload",
+    "Live watcher"
   ],
   "author": "Leonard Ginters",
-  "license": "ISC",
+  "license": "LGPL-3.0",
   "bugs": {
     "url": "https://github.com/l2ig/gow/issues"
   },
