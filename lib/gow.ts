@@ -105,6 +105,7 @@ export class Gow {
             .replace(/\*/g, "ALL")
             .replace(/\//g, "SLASH")
             .replace(/\./g, "\.")
+            .replace(/\[!/g, "[^")
             .replace(/ALLALLALL/g, "((.*)(?=\\/)(\\/)|)")
             .replace(/ALLALL/g, "(([a-zA-Z0-9-_]*)\\/|\.\/|)")
             .replace(/ALL/g, "([a-zA-Z0-9-_.]*)")
