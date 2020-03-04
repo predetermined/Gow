@@ -23,6 +23,7 @@
     "File watcher",
     "Watcher",
     "Reload on file change",
+    "cli",
     "clidaemon",
     "File reloader",
     "Node Watcher",
