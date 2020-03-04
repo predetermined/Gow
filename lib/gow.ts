@@ -1,5 +1,5 @@
 import { Dirent, promises as fs } from "fs";
-import { exec, ChildProcess } from "child_process";
+import { exec, spawn, ChildProcess } from "child_process";
 
 export interface Config {
     command?: string;
@@ -22,9 +22,8 @@ export class Gow {
     private readonly delay: number;
     private readonly runtimePath: string;
     private readonly silent: boolean;
+    private readonly fileExpression: RegExp;
     private ignoreRuntimeChanges: string[];
-    private fileExpression: RegExp;
-    private projectProcess: ChildProcess;
     private runtimeProcess: ChildProcess;
     private readyForNextReload: boolean = true;
     private reloadInQueue: boolean = false;
@@ -42,56 +41,54 @@ export class Gow {
         this.path = this.normalizePath(path);
         this.runtimePath = this.path + ".gowing/";
 
-        this.createRuntime(true);
+        this.createRuntime();
     }
 
-    createProcesses(): void {
-        this.projectProcess = this.spawnCommandProcess(this.command, "PROJECT");
-
-        process.chdir(this.runtimePath);
-        this.runtimeProcess = this.spawnCommandProcess(this.command, "RUNTIME");
+    async createProcesses(): Promise<void> {
+        await this.copyIntoRuntime();
+        this.runtimeProcess = this.spawnCommandProcess(this.command);
     }
 
-    async createRuntime(firstRun: boolean = false): Promise<void> {
-        if (firstRun) {
-            await this.copyIntoRuntime();
-            this.createProcesses();
+    async createRuntime(): Promise<void> {
+        await this.createProcesses();
 
-            if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
-            
-            setInterval(async () => {
-                const modifiedRuntimeFiles: boolean | File[] = await this.getModifiedRuntimeFiles();
-                const haveProjectFilesBeenModified: boolean = await this.haveProjectFilesBeenModified();
+        if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Created process");
 
-                if (modifiedRuntimeFiles) {
-                    for (const modifiedRuntimeFile of (modifiedRuntimeFiles as File[])) {
-                        await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
-                        this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
-                    }
+        setInterval(async () => {
+            const modifiedRuntimeFiles: boolean | File[] = await this.getModifiedRuntimeFiles();
+            const haveProjectFilesBeenModified: boolean = await this.haveProjectFilesBeenModified();
 
-                    if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Runtime files have been modified, copying them to the project root");
+            if (modifiedRuntimeFiles) {
+                for (const modifiedRuntimeFile of (modifiedRuntimeFiles as File[])) {
+                    await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
+                    this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
                 }
 
-                if (this.reloadInQueue && this.readyForNextReload) {
-                    this.readyForNextReload = false;
-                    this.reloadInQueue = false;
-                    this.createProcesses();
-                    if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
-                    return;
-                }
+                if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Runtime files have been modified, copying them to the project root");
+            }
 
-                if (!haveProjectFilesBeenModified) return;
-                if (!this.readyForNextReload) {
-                    this.reloadInQueue = true;
-                    return;
-                }
-
+            if (this.reloadInQueue && this.readyForNextReload) {
                 this.readyForNextReload = false;
+                this.reloadInQueue = false;
                 this.createProcesses();
                 if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
-            }, 1000 / 5);
-            return;
-        }
+                return;
+            }
+
+            if (!haveProjectFilesBeenModified) return;
+            if (!this.readyForNextReload) {
+                this.reloadInQueue = true;
+                return;
+            }
+
+            this.readyForNextReload = false;
+            this.createProcesses();
+            if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Reloaded");
+        }, 250);
+    }
+
+    isWindows(): boolean {
+        return /^win/.test(process.platform);
     }
 
     normalizePath(path: string, tailingSlash: boolean = true) {
@@ -112,14 +109,15 @@ export class Gow {
             .replace(/SLASH/g, "");
     }
 
-    spawnCommandProcess(command: string, env: "PROJECT" | "RUNTIME" = "PROJECT"): any {
-        switch (env) {
-            case "PROJECT":
-                this.projectProcess?.kill();
-                break;
-            case "RUNTIME":
-                this.runtimeProcess?.kill();
-                break;
+    spawnCommandProcess(command: string): any {
+        process.chdir(this.runtimePath);
+
+        if (this.runtimeProcess) {
+            if (this.isWindows()) {
+                spawn("taskkill", ["/pid", this.runtimeProcess.pid.toString(), "/f", "/t"])
+            }else {
+                this.runtimeProcess.kill();
+            }
         }
 
         const processID: number = Math.round(Math.random() * 1000);
@@ -135,6 +133,8 @@ export class Gow {
     }
 
     private async copyIntoRuntime() {
+        process.chdir(this.path);
+
         try {
             await fs.readdir(this.runtimePath);
         }catch(e) {
@@ -142,8 +142,9 @@ export class Gow {
         }
 
         const files: File[] = await this.getFiles(this.path, { last: [], current: [] });
-        
-        for (const { path, normalizedPath = path.replace(/(\/|\\)/, "/"), relativePath = normalizedPath.replace(this.path, "") } of files) {
+
+        for (const { path } of files) {
+            const relativePath = this.normalizePath(path, false).replace(this.path, "");
             const folders: string[] = relativePath.match(/([a-zA-Z0-9\/]*)(?=\/)/g);
 
             if (folders) {
