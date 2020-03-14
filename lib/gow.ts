@@ -63,8 +63,6 @@ export class Gow {
                     await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
                     this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
                 }
-
-                if (!this.silent) console.log("\x1b[97;42m Gow \x1b[0m Runtime files have been modified, copying them to the project root");
             }
 
             if (this.reloadInQueue && this.readyForNextReload) {
@@ -138,7 +136,7 @@ export class Gow {
         try {
             await fs.readdir(this.runtimePath);
         }catch(e) {
-            await fs.mkdir(this.runtimePath);
+            await fs.mkdir(this.runtimePath, { recursive: true });
         }
 
         const files: File[] = await this.getFiles(this.path, { last: [], current: [] });
