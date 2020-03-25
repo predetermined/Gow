@@ -136,13 +136,13 @@ export class Gow {
         try {
             await fs.readdir(this.runtimePath);
         }catch(e) {
-            await fs.mkdir(this.runtimePath, { recursive: true });
+            await fs.mkdir(this.runtimePath);
         }
 
         const files: File[] = await this.getFiles(this.path, { last: [], current: [] });
 
         for (const { path } of files) {
-            const relativePath = this.normalizePath(path, false).replace(this.path, "");
+            const relativePath: string = this.normalizePath(path, false).replace(this.path, "");
             const folders: string[] = relativePath.match(/([a-zA-Z0-9\/]*)(?=\/)/g);
 
             if (folders) {
@@ -150,7 +150,7 @@ export class Gow {
                     try {
                         await fs.readdir(this.runtimePath + folder);
                     }catch(e) {
-                        await fs.mkdir(this.runtimePath + folder);
+                        await fs.mkdir(this.runtimePath + folder, { recursive: true });
                     }
                 }
             }
