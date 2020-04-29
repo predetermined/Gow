@@ -1,4 +1,4 @@
-import { GowProcess } from "../lib/GowProcess";
+import { GowProcess } from "../lib/gowProcess";
 import ava, { ExecutionContext } from "ava";
 import { promises as fs } from "fs";
 
