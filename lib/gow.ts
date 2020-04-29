@@ -60,7 +60,7 @@ export class Gow {
 
             if (modifiedRuntimeFiles) {
                 for (const modifiedRuntimeFile of (modifiedRuntimeFiles as File[])) {
-                    await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path).replace(this.runtimePath, this.path));
+                    await fs.copyFile(modifiedRuntimeFile.path, this.normalizePath(modifiedRuntimeFile.path, false).replace(this.runtimePath, this.path));
                     this.ignoreRuntimeChanges.push(modifiedRuntimeFile.name);
                 }
             }
@@ -92,7 +92,7 @@ export class Gow {
     normalizePath(path: string, tailingSlash: boolean = true) {
         const normalizedPath = path.replace(/(\/|\\)/, "/");
 
-        return tailingSlash && !normalizedPath.endsWith("/") ? normalizedPath + "/" : normalizedPath;
+        return tailingSlash ? normalizedPath.replace(/\/$/, "") + "/" : normalizedPath.replace(/\/$/, "");
     }
 
     getRegularExpressionByGlob(glob: string): string {
